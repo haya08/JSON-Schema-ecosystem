@@ -16,6 +16,7 @@ export async function fetchRepoCreationDate(octokit, owner, repo) {
 
 async function fetchFirstCommitDate(octokit, owner, repo) {
   console.log(`Fetching first commit date for repository: ${owner}/${repo}`);
+
   try {
     const response = await octokit.request(
       'GET /repos/{owner}/{repo}/commits',
@@ -23,30 +24,35 @@ async function fetchFirstCommitDate(octokit, owner, repo) {
         owner,
         repo,
         per_page: 1,
-      },
+      }
     );
 
-    const lastPageUrl = response.headers.link?.match(
-      /<([^>]+)>;\s*rel="last"/,
-    )?.[1];
+    const linkHeader = response.headers.link;
+
+    const lastPageUrl = linkHeader
+      ? linkHeader.match(/<([^>]+)>;\s*rel="last"/)?.[1]
+      : null;
 
     if (!lastPageUrl) {
-      if (response.data.length > 0) {
-        response.data[0].commit.author.date;
-      } else {
+      if (response.data.length === 0) {
         throw new Error(`No commits found for ${owner}/${repo}`);
       }
+
+      return Date.parse(response.data[0].commit.author.date);
     }
 
     const lastPageResponse = await octokit.request(lastPageUrl);
 
-    if (lastPageResponse.data.length > 0) {
-      return Date.parse(lastPageResponse.data[0].commit.author.date);
-    } else {
-      throw new Error(`No commits found ${owner}/${repo}`);
+    if (lastPageResponse.data.length === 0) {
+      throw new Error(`No commits found for ${owner}/${repo}`);
     }
+
+    return Date.parse(lastPageResponse.data[0].commit.author.date);
+
   } catch (err) {
-    throw new Error(`Could not find any commits for ${owner}/${repo}`);
+    throw new Error(
+      `Failed to fetch first commit for ${owner}/${repo}: ${err.message}`
+    );
   }
 }
 
